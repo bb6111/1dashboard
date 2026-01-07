@@ -64,17 +64,67 @@ def get_s3_public_url():
     return f"{endpoint}/{bucket}"
 
 
-@st.cache_data(ttl=60)
-def load_index():
-    """Load index.json from S3."""
+def load_index_nocache():
+    """Load index.json from S3 (no cache)."""
     try:
         s3 = get_s3_client()
         bucket = st.secrets["s3"]["bucket"]
         response = s3.get_object(Bucket=bucket, Key="index.json")
         return json.loads(response['Body'].read().decode('utf-8'))
     except Exception as e:
-        st.error(f"Failed to load index: {e}")
         return {"videos": {}}
+
+
+@st.cache_data(ttl=60)
+def load_index():
+    """Load index.json from S3."""
+    return load_index_nocache()
+
+
+def delete_video(video_id: str) -> tuple[bool, str]:
+    """
+    Delete a video and all its files from S3.
+    
+    Returns (success, message)
+    """
+    try:
+        s3 = get_s3_client()
+        bucket = st.secrets["s3"]["bucket"]
+        prefix = f"videos/{video_id}/"
+        
+        # List all objects with this prefix
+        objects_to_delete = []
+        paginator = s3.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                objects_to_delete.append({'Key': obj['Key']})
+        
+        if not objects_to_delete:
+            return False, f"No files found for video {video_id}"
+        
+        # Delete all objects
+        s3.delete_objects(
+            Bucket=bucket,
+            Delete={'Objects': objects_to_delete}
+        )
+        
+        # Update index.json
+        index = load_index_nocache()
+        if video_id in index.get("videos", {}):
+            del index["videos"][video_id]
+            s3.put_object(
+                Bucket=bucket,
+                Key="index.json",
+                Body=json.dumps(index, ensure_ascii=False, indent=2),
+                ContentType="application/json",
+                ACL="public-read",
+            )
+        
+        return True, f"Deleted {len(objects_to_delete)} files"
+        
+    except Exception as e:
+        return False, str(e)
 
 
 @st.cache_data(ttl=60)
@@ -303,6 +353,26 @@ def main():
             options=list(video_options.keys()),
             format_func=lambda x: video_options[x],
         )
+        
+        # Delete video button
+        if selected_video:
+            with st.expander("🗑️ Delete Video", expanded=False):
+                st.warning(f"This will permanently delete **{video_options[selected_video]}** and all its clips!")
+                
+                confirm_text = st.text_input(
+                    "Type 'DELETE' to confirm",
+                    key="delete_confirm"
+                )
+                
+                if st.button("🗑️ Delete Permanently", type="primary", disabled=confirm_text != "DELETE"):
+                    with st.spinner("Deleting..."):
+                        success, message = delete_video(selected_video)
+                        if success:
+                            st.success(f"✅ {message}")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {message}")
         
         st.divider()
         
