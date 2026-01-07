@@ -92,7 +92,7 @@ def load_video_metadata(video_id: str):
 
 
 def trigger_github_action(event_type: str, payload: dict):
-    """Trigger a GitHub Actions workflow."""
+    """Trigger a GitHub Actions workflow via repository dispatch."""
     token = st.secrets.get("github", {}).get("token")
     if not token:
         st.error("GitHub token not configured")
@@ -113,6 +113,33 @@ def trigger_github_action(event_type: str, payload: dict):
     )
     
     return response.status_code == 204
+
+
+def trigger_workflow_dispatch(workflow_file: str, inputs: dict):
+    """Trigger a GitHub Actions workflow via workflow dispatch."""
+    token = st.secrets.get("github", {}).get("token")
+    if not token:
+        st.error("GitHub token not configured")
+        return False, "GitHub token not configured"
+    
+    repo = st.secrets.get("github", {}).get("repo", "meanapes/1sec-clips")
+    
+    response = requests.post(
+        f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_file}/dispatches",
+        headers={
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json",
+        },
+        json={
+            "ref": "main",
+            "inputs": inputs,
+        }
+    )
+    
+    if response.status_code == 204:
+        return True, "Workflow triggered successfully!"
+    else:
+        return False, f"Error {response.status_code}: {response.text}"
 
 
 def format_duration(seconds: float) -> str:
@@ -209,7 +236,51 @@ def main():
         videos = index.get("videos", {})
         
         if not videos:
-            st.warning("No videos found in bucket")
+            st.warning("No videos found yet")
+            # Still show process new video section
+            st.divider()
+            st.subheader("Actions")
+            with st.expander("🎥 Process New Video", expanded=True):
+                video_url = st.text_input(
+                    "Video URL",
+                    placeholder="YouTube URL or magnet link",
+                    help="Paste a YouTube video URL or magnet link",
+                    key="empty_video_url"
+                )
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    proc_min_score = st.number_input("Min Score", 0.0, 10.0, 6.0, 0.5, key="empty_min_score")
+                with col_b:
+                    proc_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10, key="empty_max_dur")
+                
+                ai_model = st.selectbox(
+                    "AI Model",
+                    ["gemini-2.0-flash", "gemini-3-flash-preview", "gemini-3-pro-preview"],
+                    index=0,
+                    key="empty_ai_model"
+                )
+                
+                if st.button("🚀 Start Processing", type="primary", disabled=not video_url, key="empty_process"):
+                    with st.spinner("Triggering workflow..."):
+                        success, message = trigger_workflow_dispatch(
+                            "process-video.yml",
+                            {
+                                "video_url": video_url,
+                                "min_score": str(proc_min_score),
+                                "max_duration": str(proc_max_duration),
+                                "ai_model": ai_model,
+                            }
+                        )
+                        if success:
+                            st.success("✅ Processing started! Check GitHub Actions for progress.")
+                            st.link_button(
+                                "View GitHub Actions",
+                                f"https://github.com/{st.secrets.get('github', {}).get('repo', 'meanapes/1sec-clips')}/actions",
+                                key="empty_gh_link"
+                            )
+                        else:
+                            st.error(f"❌ {message}")
             st.stop()
         
         # Video selector
@@ -243,8 +314,45 @@ def main():
             st.cache_data.clear()
             st.rerun()
         
-        if st.button("🎥 Process New Video"):
-            st.info("Go to GitHub Actions to trigger new video processing")
+        # Process New Video
+        with st.expander("🎥 Process New Video"):
+            video_url = st.text_input(
+                "Video URL",
+                placeholder="YouTube URL or magnet link",
+                help="Paste a YouTube video URL or magnet link"
+            )
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                proc_min_score = st.number_input("Min Score", 0.0, 10.0, 6.0, 0.5)
+            with col_b:
+                proc_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10)
+            
+            ai_model = st.selectbox(
+                "AI Model",
+                ["gemini-2.0-flash", "gemini-3-flash-preview", "gemini-3-pro-preview"],
+                index=0
+            )
+            
+            if st.button("🚀 Start Processing", type="primary", disabled=not video_url):
+                with st.spinner("Triggering workflow..."):
+                    success, message = trigger_workflow_dispatch(
+                        "process-video.yml",
+                        {
+                            "video_url": video_url,
+                            "min_score": str(proc_min_score),
+                            "max_duration": str(proc_max_duration),
+                            "ai_model": ai_model,
+                        }
+                    )
+                    if success:
+                        st.success("✅ Processing started! Check GitHub Actions for progress.")
+                        st.link_button(
+                            "View GitHub Actions",
+                            f"https://github.com/{st.secrets.get('github', {}).get('repo', 'meanapes/1sec-clips')}/actions"
+                        )
+                    else:
+                        st.error(f"❌ {message}")
     
     # Main content
     if selected_video:
