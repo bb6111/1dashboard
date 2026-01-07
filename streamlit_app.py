@@ -6,6 +6,7 @@ Simple Streamlit app to browse clips and trigger short rendering.
 import json
 import os
 from datetime import datetime
+from urllib.parse import quote
 
 import boto3
 import requests
@@ -124,7 +125,9 @@ def format_duration(seconds: float) -> str:
 def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
     """Render a single clip card."""
     clip_id = clip.get("id", "unknown")
-    clip_url = f"{s3_base_url}/videos/{video_id}/clips/{clip_id}.mp4"
+    # URL-encode video_id for Cyrillic characters
+    encoded_video_id = quote(video_id, safe='')
+    clip_url = f"{s3_base_url}/videos/{encoded_video_id}/clips/{clip_id}.mp4"
     
     col1, col2 = st.columns([1, 2])
     
@@ -133,13 +136,14 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
     
     with col2:
         # Header with ID and score
-        moment = clip.get("moment", {})
-        score = moment.get("virality_score", 0)
+        # Support both nested "moment" structure and flat structure
+        moment = clip.get("moment", clip)
+        score = moment.get("virality_score", clip.get("virality_score", 0))
         
         st.markdown(f"### {clip_id} &nbsp; <span class='score-badge'>{score:.1f}</span>", unsafe_allow_html=True)
         
         # Transcript
-        transcript = moment.get("transcript", "No transcript")
+        transcript = moment.get("transcript", clip.get("transcript", "No transcript"))
         st.markdown(f"**Transcript:** {transcript[:200]}{'...' if len(transcript) > 200 else ''}")
         
         # Timing
@@ -149,23 +153,23 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
         st.markdown(f"**Timing:** {format_duration(start)} → {format_duration(end)} ({duration:.1f}s)")
         
         # Type and mood
-        clip_type = moment.get("type", "unknown")
-        mood = moment.get("mood", "neutral")
+        clip_type = moment.get("type", clip.get("type", "unknown"))
+        mood = moment.get("mood", clip.get("mood", "neutral"))
         st.markdown(f"**Type:** {clip_type} · **Mood:** {mood}")
         
         # Tags
-        tags = moment.get("tags", [])
+        tags = moment.get("tags", clip.get("tags", []))
         if tags:
             tags_html = " ".join([f"<span class='tag'>#{tag}</span>" for tag in tags[:6]])
             st.markdown(f"**Tags:** {tags_html}", unsafe_allow_html=True)
         
         # Characters
-        characters = moment.get("characters", [])
+        characters = moment.get("characters", clip.get("characters", []))
         if characters:
             st.markdown(f"**Characters:** {', '.join(characters)}")
         
         # Reason
-        reason = moment.get("reason", "")
+        reason = moment.get("reason", clip.get("reason", ""))
         if reason:
             st.markdown(f"**Why:** {reason}")
         
@@ -290,9 +294,9 @@ def main():
         # Apply filters
         filtered_clips = []
         for clip in clips:
-            moment = clip.get("moment", {})
-            score = moment.get("virality_score", 0)
-            clip_type = moment.get("type", "unknown")
+            moment = clip.get("moment", clip)
+            score = moment.get("virality_score", clip.get("virality_score", 0))
+            clip_type = moment.get("type", clip.get("type", "unknown"))
             
             if score < min_score:
                 continue
@@ -304,7 +308,10 @@ def main():
         st.subheader(f"Clips ({len(filtered_clips)} of {len(clips)})")
         
         # Sort by score
-        filtered_clips.sort(key=lambda x: x.get("moment", {}).get("virality_score", 0), reverse=True)
+        def get_score(c):
+            m = c.get("moment", c)
+            return m.get("virality_score", c.get("virality_score", 0))
+        filtered_clips.sort(key=get_score, reverse=True)
         
         # Render clips
         s3_base_url = get_s3_public_url()
