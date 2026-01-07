@@ -19,82 +19,24 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for better dark theme
+# Minimal custom CSS
 st.markdown("""
 <style>
-    /* Main background */
-    .stApp {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    }
-    
-    /* Make all text more visible */
-    .stApp, .stApp p, .stApp span, .stApp label, .stApp div {
-        color: #e8e8e8 !important;
-    }
-    
-    /* Headers */
-    .stApp h1, .stApp h2, .stApp h3 {
-        color: #ffffff !important;
-    }
-    
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background: #0f0f1a;
-    }
-    
-    /* Score badge */
     .score-badge {
-        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-        color: white !important;
-        padding: 4px 14px;
+        background: #ff4b4b;
+        color: white;
+        padding: 4px 12px;
         border-radius: 20px;
         font-weight: bold;
-        font-size: 14px;
     }
-    
-    /* Tags */
     .tag {
-        background: #3d3d5c;
-        color: #ffffff !important;
-        padding: 4px 10px;
-        border-radius: 6px;
-        margin-right: 6px;
+        background: #f0f2f6;
+        color: #333;
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin-right: 4px;
         font-size: 12px;
         display: inline-block;
-        margin-bottom: 4px;
-    }
-    
-    /* Metrics */
-    [data-testid="stMetricValue"] {
-        color: #ffffff !important;
-        font-size: 28px !important;
-    }
-    
-    [data-testid="stMetricLabel"] {
-        color: #a0a0a0 !important;
-    }
-    
-    /* Dividers */
-    hr {
-        border-color: #3d3d5c !important;
-    }
-    
-    /* Video container */
-    .stVideo {
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-        color: white;
-        border: none;
-        border-radius: 8px;
-    }
-    
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #5b4cdb, #8c7ae6);
     }
 </style>
 """, unsafe_allow_html=True)
