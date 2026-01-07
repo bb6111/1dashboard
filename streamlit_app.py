@@ -246,9 +246,11 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
             st.markdown(f"**Characters:** {', '.join(characters)}")
         
         # Reason
-        reason = moment.get("reason", clip.get("reason", ""))
+        # Prefer Russian reason, fallback to English
+        reason_ru = moment.get("reason_ru", clip.get("reason_ru", ""))
+        reason = reason_ru or moment.get("reason", clip.get("reason", ""))
         if reason:
-            st.markdown(f"**Why:** {reason}")
+            st.markdown(f"**Почему:** {reason}")
         
         # Check if short exists
         encoded_video_id = quote(video_id, safe='')
