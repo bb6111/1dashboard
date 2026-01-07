@@ -250,6 +250,42 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
         if reason:
             st.markdown(f"**Why:** {reason}")
         
+        # Actions
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.download_button(
+                "⬇️ Download",
+                data=clip_url,
+                file_name=f"{clip_id}.mp4",
+                mime="video/mp4",
+                key=f"dl_{video_id}_{clip_id}",
+                use_container_width=True,
+            )
+        with col_b:
+            if st.button("🎬 Render Short", key=f"short_{video_id}_{clip_id}", use_container_width=True):
+                st.session_state[f"render_short_{video_id}_{clip_id}"] = True
+        
+        # Show render options if button was clicked
+        if st.session_state.get(f"render_short_{video_id}_{clip_id}"):
+            with st.form(key=f"short_form_{video_id}_{clip_id}"):
+                st.subheader("🎬 Render Short")
+                theme = st.selectbox("Theme", ["episode", "minimal", "cinematic"], key=f"theme_{video_id}_{clip_id}")
+                
+                if st.form_submit_button("🚀 Start Rendering"):
+                    success, message = trigger_workflow_dispatch(
+                        "render-short.yml",
+                        {
+                            "video_id": video_id,
+                            "clip_id": clip_id,
+                            "theme": theme,
+                        }
+                    )
+                    if success:
+                        st.success("✅ Rendering started!")
+                        st.session_state[f"render_short_{video_id}_{clip_id}"] = False
+                    else:
+                        st.error(f"❌ {message}")
+        
         # Action buttons
         btn_col1, btn_col2, btn_col3 = st.columns(3)
         
