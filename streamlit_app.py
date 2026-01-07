@@ -324,12 +324,9 @@ def main():
                 with col_b:
                     proc_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10, key="empty_max_dur")
                 
-                ai_model = st.selectbox(
-                    "AI Model",
-                    ["gemini-2.0-flash", "gemini-3-flash-preview", "gemini-3-pro-preview"],
-                    index=0,
-                    key="empty_ai_model"
-                )
+                # Fixed to gemini-3-pro-preview (best quality)
+                ai_model = "gemini-3-pro-preview"
+                st.text_input("AI Model", value=ai_model, disabled=True, key="empty_ai_model")
                 
                 audio_lang = st.selectbox(
                     "Audio Language",
@@ -391,12 +388,9 @@ def main():
                     with col_b:
                         reprocess_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10, key="reprocess_max_dur")
                     
-                    reprocess_model = st.selectbox(
-                        "AI Model",
-                        ["gemini-2.0-flash", "gemini-3-flash-preview", "gemini-3-pro-preview"],
-                        index=0,
-                        key="reprocess_model"
-                    )
+                    # Fixed to gemini-3-pro-preview (best quality)
+                    reprocess_model = "gemini-3-pro-preview"
+                    st.text_input("AI Model", value=reprocess_model, disabled=True, key="reprocess_model")
                     
                     reprocess_audio_lang = st.selectbox(
                         "Audio Language",
