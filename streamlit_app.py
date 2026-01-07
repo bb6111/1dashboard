@@ -284,6 +284,13 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
                         st.session_state[f"render_short_{video_id}_{clip_id}"] = False
                     else:
                         st.error(f"❌ {message}")
+            
+            # Show GitHub Actions link outside the form (always visible after triggering)
+            st.link_button(
+                "👁️ Смотреть в GitHub Actions",
+                f"https://github.com/{st.secrets.get('github', {}).get('repo', 'meanapes/1sec-clips')}/actions/workflows/render-short.yml",
+                use_container_width=True
+            )
     
     st.divider()
 
