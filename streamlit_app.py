@@ -251,16 +251,9 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
             st.markdown(f"**Why:** {reason}")
         
         # Actions
-        col_a, col_b, col_c = st.columns(3)
+        col_a, col_b = st.columns(2)
         with col_a:
-            st.download_button(
-                "⬇️ Download",
-                data=clip_url,
-                file_name=f"{clip_id}.mp4",
-                mime="video/mp4",
-                key=f"dl_{video_id}_{clip_id}",
-                use_container_width=True,
-            )
+            st.link_button("⬇️ Download", clip_url, use_container_width=True)
         with col_b:
             if st.button("🎬 Render Short", key=f"short_{video_id}_{clip_id}", use_container_width=True):
                 st.session_state[f"render_short_{video_id}_{clip_id}"] = True
@@ -285,28 +278,6 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
                         st.session_state[f"render_short_{video_id}_{clip_id}"] = False
                     else:
                         st.error(f"❌ {message}")
-        
-        # Action buttons
-        btn_col1, btn_col2, btn_col3 = st.columns(3)
-        
-        with btn_col1:
-            st.link_button("⬇️ Download", clip_url)
-        
-        with btn_col2:
-            if st.button("🎬 Make Short", key=f"short_{video_id}_{clip_id}"):
-                with st.spinner("Triggering render..."):
-                    success = trigger_github_action("render_short", {
-                        "video_id": video_id,
-                        "clip_id": clip_id,
-                    })
-                    if success:
-                        st.success("Render triggered! Check GitHub Actions.")
-                    else:
-                        st.error("Failed to trigger render")
-        
-        with btn_col3:
-            # Copy timestamp button
-            st.code(f"{format_duration(start)} - {format_duration(end)}")
     
     st.divider()
 
