@@ -366,8 +366,62 @@ def main():
             format_func=lambda x: video_options[x],
         )
         
-        # Delete video button
+        # Video actions
         if selected_video:
+            # Re-process button
+            with st.expander("🔄 Перезалив", expanded=False):
+                # Load metadata to get original URL
+                video_meta = load_video_metadata(selected_video)
+                original_url = video_meta.get("original_url", "") if video_meta else ""
+                
+                if original_url:
+                    st.info(f"Перезапустить обработку с теми же или новыми настройками")
+                    st.code(original_url[:60] + "..." if len(original_url) > 60 else original_url, language=None)
+                    
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        reprocess_min_score = st.number_input("Min Score", 0.0, 10.0, 6.0, 0.5, key="reprocess_min_score")
+                    with col_b:
+                        reprocess_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10, key="reprocess_max_dur")
+                    
+                    reprocess_model = st.selectbox(
+                        "AI Model",
+                        ["gemini-2.0-flash", "gemini-3-flash-preview", "gemini-3-pro-preview"],
+                        index=0,
+                        key="reprocess_model"
+                    )
+                    
+                    reprocess_audio_lang = st.selectbox(
+                        "Audio Language",
+                        ["ru", "en", "auto"],
+                        index=0,
+                        key="reprocess_audio_lang"
+                    )
+                    
+                    if st.button("🚀 Запустить перезалив", type="primary", key="reprocess_btn"):
+                        with st.spinner("Запускаю обработку..."):
+                            success, message = trigger_workflow_dispatch(
+                                "process-video.yml",
+                                {
+                                    "video_url": original_url,
+                                    "min_score": str(reprocess_min_score),
+                                    "max_duration": str(reprocess_max_duration),
+                                    "model": reprocess_model,
+                                    "audio_language": reprocess_audio_lang,
+                                }
+                            )
+                            if success:
+                                st.success("✅ Обработка запущена!")
+                                st.link_button(
+                                    "Смотреть в GitHub Actions",
+                                    f"https://github.com/{st.secrets.get('github', {}).get('repo', 'meanapes/1sec-clips')}/actions"
+                                )
+                            else:
+                                st.error(f"❌ {message}")
+                else:
+                    st.warning("URL источника не найден в метаданных")
+            
+            # Delete video button
             with st.expander("🗑️ Delete Video", expanded=False):
                 st.warning(f"This will permanently delete **{video_options[selected_video]}** and all its clips!")
                 
