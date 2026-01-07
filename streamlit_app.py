@@ -19,32 +19,82 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for dark theme
+# Custom CSS for better dark theme
 st.markdown("""
 <style>
+    /* Main background */
     .stApp {
-        background-color: #0e0e0e;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     }
-    .clip-card {
-        background: #1a1a2e;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 16px;
+    
+    /* Make all text more visible */
+    .stApp, .stApp p, .stApp span, .stApp label, .stApp div {
+        color: #e8e8e8 !important;
     }
+    
+    /* Headers */
+    .stApp h1, .stApp h2, .stApp h3 {
+        color: #ffffff !important;
+    }
+    
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background: #0f0f1a;
+    }
+    
+    /* Score badge */
     .score-badge {
-        background: #6c5ce7;
-        color: white;
-        padding: 4px 12px;
+        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        color: white !important;
+        padding: 4px 14px;
         border-radius: 20px;
         font-weight: bold;
+        font-size: 14px;
     }
+    
+    /* Tags */
     .tag {
-        background: #2d3436;
-        color: #dfe6e9;
-        padding: 4px 8px;
-        border-radius: 4px;
-        margin-right: 4px;
+        background: #3d3d5c;
+        color: #ffffff !important;
+        padding: 4px 10px;
+        border-radius: 6px;
+        margin-right: 6px;
         font-size: 12px;
+        display: inline-block;
+        margin-bottom: 4px;
+    }
+    
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        color: #ffffff !important;
+        font-size: 28px !important;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        color: #a0a0a0 !important;
+    }
+    
+    /* Dividers */
+    hr {
+        border-color: #3d3d5c !important;
+    }
+    
+    /* Video container */
+    .stVideo {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        color: white;
+        border: none;
+        border-radius: 8px;
+    }
+    
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #5b4cdb, #8c7ae6);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -233,7 +283,7 @@ def main():
         # Filters
         st.subheader("Filters")
         
-        min_score = st.slider("Min Score", 0.0, 10.0, 6.0, 0.5)
+        min_score = st.slider("Min Score", 0.0, 10.0, 0.0, 0.5)
         
         clip_types = ["all", "dialogue", "funny", "emotional", "quote", "plot_twist", "iconic", "insight"]
         selected_type = st.selectbox("Clip Type", clip_types)
