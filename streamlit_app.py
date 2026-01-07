@@ -250,13 +250,19 @@ def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
         if reason:
             st.markdown(f"**Why:** {reason}")
         
+        # Check if short exists
+        encoded_video_id = quote(video_id, safe='')
+        short_url_episode = f"{s3_base_url}/videos/{encoded_video_id}/shorts/short_{clip_id}_episode.mp4"
+        
         # Actions
-        col_a, col_b = st.columns(2)
+        col_a, col_b, col_c = st.columns(3)
         with col_a:
-            st.link_button("⬇️ Download", clip_url, use_container_width=True)
+            st.link_button("⬇️ Clip", clip_url, use_container_width=True)
         with col_b:
             if st.button("🎬 Render Short", key=f"short_{video_id}_{clip_id}", use_container_width=True):
                 st.session_state[f"render_short_{video_id}_{clip_id}"] = True
+        with col_c:
+            st.link_button("📱 Short", short_url_episode, use_container_width=True, help="Download rendered short (if exists)")
         
         # Show render options if button was clicked
         if st.session_state.get(f"render_short_{video_id}_{clip_id}"):
