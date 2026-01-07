@@ -326,17 +326,21 @@ def main():
                 with col_b:
                     proc_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10, key="empty_max_dur")
                 
+                col_c, col_d = st.columns(2)
+                with col_c:
+                    proc_padding = st.number_input("Padding (s)", 0, 30, 3, 1, key="empty_padding", help="Секунды до/после момента")
+                with col_d:
+                    audio_lang = st.selectbox(
+                        "Audio Language",
+                        ["ru", "en", "auto"],
+                        index=0,
+                        key="empty_audio_lang",
+                        help="Prefer Russian audio track"
+                    )
+                
                 # Fixed to gemini-3-pro-preview (best quality)
                 ai_model = "gemini-3-pro-preview"
                 st.text_input("AI Model", value=ai_model, disabled=True, key="empty_ai_model")
-                
-                audio_lang = st.selectbox(
-                    "Audio Language",
-                    ["ru", "en", "auto"],
-                    index=0,
-                    key="empty_audio_lang",
-                    help="Prefer Russian audio track (for movies with multiple dubs)"
-                )
                 
                 if st.button("🚀 Start Processing", type="primary", disabled=not video_url, key="empty_process"):
                     with st.spinner("Triggering workflow..."):
@@ -347,6 +351,7 @@ def main():
                                 "min_score": str(proc_min_score),
                                 "max_duration": str(proc_max_duration),
                                 "model": ai_model,
+                                "padding": str(proc_padding),
                                 "audio_language": audio_lang,
                             }
                         )
@@ -382,7 +387,9 @@ def main():
                 
                 if original_url:
                     st.info(f"Перезапустить обработку с теми же или новыми настройками")
-                    st.code(original_url[:60] + "..." if len(original_url) > 60 else original_url, language=None)
+                    # Show full URL in expandable text area (not truncated!)
+                    with st.expander("📋 Исходный URL", expanded=False):
+                        st.text_area("URL", value=original_url, height=100, disabled=True, key="reprocess_url_full")
                     
                     col_a, col_b = st.columns(2)
                     with col_a:
@@ -390,16 +397,20 @@ def main():
                     with col_b:
                         reprocess_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10, key="reprocess_max_dur")
                     
+                    col_c, col_d = st.columns(2)
+                    with col_c:
+                        reprocess_padding = st.number_input("Padding (s)", 0, 30, 3, 1, key="reprocess_padding", help="Секунды до/после момента")
+                    with col_d:
+                        reprocess_audio_lang = st.selectbox(
+                            "Audio Language",
+                            ["ru", "en", "auto"],
+                            index=0,
+                            key="reprocess_audio_lang"
+                        )
+                    
                     # Fixed to gemini-3-pro-preview (best quality)
                     reprocess_model = "gemini-3-pro-preview"
                     st.text_input("AI Model", value=reprocess_model, disabled=True, key="reprocess_model")
-                    
-                    reprocess_audio_lang = st.selectbox(
-                        "Audio Language",
-                        ["ru", "en", "auto"],
-                        index=0,
-                        key="reprocess_audio_lang"
-                    )
                     
                     if st.button("🚀 Запустить перезалив", type="primary", key="reprocess_btn"):
                         with st.spinner("Запускаю обработку..."):
@@ -410,6 +421,7 @@ def main():
                                     "min_score": str(reprocess_min_score),
                                     "max_duration": str(reprocess_max_duration),
                                     "model": reprocess_model,
+                                    "padding": str(reprocess_padding),
                                     "audio_language": reprocess_audio_lang,
                                 }
                             )
