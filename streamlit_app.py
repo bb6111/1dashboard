@@ -348,8 +348,7 @@ def main():
                             st.success("✅ Processing started! Check GitHub Actions for progress.")
                             st.link_button(
                                 "View GitHub Actions",
-                                f"https://github.com/{st.secrets.get('github', {}).get('repo', 'meanapes/1sec-clips')}/actions",
-                                key="empty_gh_link"
+                                f"https://github.com/{st.secrets.get('github', {}).get('repo', 'meanapes/1sec-clips')}/actions"
                             )
                         else:
                             st.error(f"❌ {message}")
