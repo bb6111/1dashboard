@@ -261,6 +261,14 @@ def main():
                     key="empty_ai_model"
                 )
                 
+                audio_lang = st.selectbox(
+                    "Audio Language",
+                    ["ru", "en", "auto"],
+                    index=0,
+                    key="empty_audio_lang",
+                    help="Prefer Russian audio track (for movies with multiple dubs)"
+                )
+                
                 if st.button("🚀 Start Processing", type="primary", disabled=not video_url, key="empty_process"):
                     with st.spinner("Triggering workflow..."):
                         success, message = trigger_workflow_dispatch(
@@ -269,7 +277,8 @@ def main():
                                 "video_url": video_url,
                                 "min_score": str(proc_min_score),
                                 "max_duration": str(proc_max_duration),
-                                "ai_model": ai_model,
+                                "model": ai_model,
+                                "audio_language": audio_lang,
                             }
                         )
                         if success:
@@ -334,6 +343,13 @@ def main():
                 index=0
             )
             
+            audio_lang = st.selectbox(
+                "Audio Language",
+                ["ru", "en", "auto"],
+                index=0,
+                help="Prefer Russian audio track (for movies with multiple dubs)"
+            )
+            
             if st.button("🚀 Start Processing", type="primary", disabled=not video_url):
                 with st.spinner("Triggering workflow..."):
                     success, message = trigger_workflow_dispatch(
@@ -342,7 +358,8 @@ def main():
                             "video_url": video_url,
                             "min_score": str(proc_min_score),
                             "max_duration": str(proc_max_duration),
-                            "ai_model": ai_model,
+                            "model": ai_model,
+                            "audio_language": audio_lang,
                         }
                     )
                     if success:
