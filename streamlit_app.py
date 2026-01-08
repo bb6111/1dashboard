@@ -12,7 +12,7 @@ from urllib.parse import quote
 import boto3
 import requests
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
+# Removed streamlit_autorefresh - using manual refresh button instead
 
 # Page config
 st.set_page_config(
@@ -730,10 +730,14 @@ def main():
                 render_clip_card(clip, selected_video, s3_base_url)
         
         with tab_gallery:
-            # Auto-refresh every 30 seconds when on gallery tab
-            st_autorefresh(interval=30000, limit=None, key="gallery_refresh")
-            
-            st.subheader("🎬 Rendered Shorts")
+            # Header with refresh button
+            col_title, col_refresh = st.columns([3, 1])
+            with col_title:
+                st.subheader("🎬 Rendered Shorts")
+            with col_refresh:
+                if st.button("🔄 Refresh", key="gallery_refresh_btn", use_container_width=True):
+                    st.cache_data.clear()
+                    st.rerun()
             
             # Load render status
             render_status = load_render_status(selected_video)
