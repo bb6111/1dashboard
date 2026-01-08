@@ -206,8 +206,8 @@ def load_render_status(video_id: str) -> dict:
     try:
         s3 = get_s3_client()
         bucket = st.secrets["s3"]["bucket"]
-        encoded_video_id = quote(video_id, safe='')
-        key = f"videos/{encoded_video_id}/render_status.json"
+        # Don't URL-encode - use raw video_id to match workflow
+        key = f"videos/{video_id}/render_status.json"
         response = s3.get_object(Bucket=bucket, Key=key)
         return json.loads(response['Body'].read().decode('utf-8'))
     except Exception:
@@ -219,8 +219,8 @@ def save_render_status(video_id: str, status: dict):
     try:
         s3 = get_s3_client()
         bucket = st.secrets["s3"]["bucket"]
-        encoded_video_id = quote(video_id, safe='')
-        key = f"videos/{encoded_video_id}/render_status.json"
+        # Don't URL-encode - use raw video_id to match workflow
+        key = f"videos/{video_id}/render_status.json"
         s3.put_object(
             Bucket=bucket,
             Key=key,
@@ -238,8 +238,8 @@ def check_short_exists(video_id: str, clip_id: str, s3_base_url: str) -> bool:
     try:
         s3 = get_s3_client()
         bucket = st.secrets["s3"]["bucket"]
-        encoded_video_id = quote(video_id, safe='')
-        key = f"videos/{encoded_video_id}/shorts/short_{clip_id}_episode.mp4"
+        # Don't URL-encode - use raw video_id to match workflow
+        key = f"videos/{video_id}/shorts/short_{clip_id}_episode.mp4"
         s3.head_object(Bucket=bucket, Key=key)
         return True
     except Exception:
