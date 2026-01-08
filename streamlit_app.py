@@ -5,12 +5,14 @@ Simple Streamlit app to browse clips and trigger short rendering.
 
 import json
 import os
+import time
 from datetime import datetime
 from urllib.parse import quote
 
 import boto3
 import requests
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
 # Page config
 st.set_page_config(
@@ -197,6 +199,99 @@ def format_duration(seconds: float) -> str:
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins}:{secs:02d}"
+
+
+def load_render_status(video_id: str) -> dict:
+    """Load render status for a video from S3."""
+    try:
+        s3 = get_s3_client()
+        bucket = st.secrets["s3"]["bucket"]
+        encoded_video_id = quote(video_id, safe='')
+        key = f"videos/{encoded_video_id}/render_status.json"
+        response = s3.get_object(Bucket=bucket, Key=key)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except Exception:
+        return {"clips": {}}
+
+
+def save_render_status(video_id: str, status: dict):
+    """Save render status for a video to S3."""
+    try:
+        s3 = get_s3_client()
+        bucket = st.secrets["s3"]["bucket"]
+        encoded_video_id = quote(video_id, safe='')
+        key = f"videos/{encoded_video_id}/render_status.json"
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(status, ensure_ascii=False, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except Exception as e:
+        st.error(f"Failed to save render status: {e}")
+        return False
+
+
+def check_short_exists(video_id: str, clip_id: str, s3_base_url: str) -> bool:
+    """Check if a rendered short exists in S3."""
+    try:
+        s3 = get_s3_client()
+        bucket = st.secrets["s3"]["bucket"]
+        encoded_video_id = quote(video_id, safe='')
+        key = f"videos/{encoded_video_id}/shorts/short_{clip_id}_episode.mp4"
+        s3.head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:
+        return False
+
+
+def trigger_batch_render(video_id: str, clips: list, theme: str = "episode") -> tuple[int, int]:
+    """
+    Trigger rendering for multiple clips at once.
+    Returns (success_count, total_count)
+    """
+    success_count = 0
+    total = len(clips)
+    
+    # Load or create render status
+    render_status = load_render_status(video_id)
+    
+    for clip in clips:
+        clip_id = clip.get("id", "unknown")
+        
+        # Update status to "queued"
+        render_status["clips"][clip_id] = {
+            "status": "queued",
+            "queued_at": datetime.utcnow().isoformat(),
+            "theme": theme,
+        }
+        
+        # Trigger workflow
+        success, _ = trigger_workflow_dispatch(
+            "render-short.yml",
+            {
+                "video_id": video_id,
+                "clip_id": clip_id,
+                "theme": theme,
+            }
+        )
+        
+        if success:
+            success_count += 1
+            render_status["clips"][clip_id]["status"] = "rendering"
+            render_status["clips"][clip_id]["started_at"] = datetime.utcnow().isoformat()
+        else:
+            render_status["clips"][clip_id]["status"] = "failed"
+            render_status["clips"][clip_id]["error"] = "Failed to trigger workflow"
+        
+        # Small delay to avoid rate limiting
+        time.sleep(0.5)
+    
+    # Save status
+    save_render_status(video_id, render_status)
+    
+    return success_count, total
 
 
 def render_clip_card(clip: dict, video_id: str, s3_base_url: str):
@@ -567,36 +662,165 @@ def main():
         
         st.divider()
         
+        # Tabs: Clips | Gallery
+        tab_clips, tab_gallery = st.tabs(["📋 Clips", "🎬 Gallery"])
+        
         # Clips
         clips = metadata.get("clips", [])
-        
-        # Apply filters
-        filtered_clips = []
-        for clip in clips:
-            moment = clip.get("moment", clip)
-            score = moment.get("virality_score", clip.get("virality_score", 0))
-            clip_type = moment.get("type", clip.get("type", "unknown"))
-            
-            if score < min_score:
-                continue
-            if selected_type != "all" and clip_type != selected_type:
-                continue
-            
-            filtered_clips.append(clip)
-        
-        st.subheader(f"Clips ({len(filtered_clips)} of {len(clips)})")
-        
-        # Sort by score
-        def get_score(c):
-            m = c.get("moment", c)
-            return m.get("virality_score", c.get("virality_score", 0))
-        filtered_clips.sort(key=get_score, reverse=True)
-        
-        # Render clips
         s3_base_url = get_s3_public_url()
         
-        for clip in filtered_clips:
-            render_clip_card(clip, selected_video, s3_base_url)
+        with tab_clips:
+            # Apply filters
+            filtered_clips = []
+            for clip in clips:
+                moment = clip.get("moment", clip)
+                score = moment.get("virality_score", clip.get("virality_score", 0))
+                clip_type = moment.get("type", clip.get("type", "unknown"))
+                
+                if score < min_score:
+                    continue
+                if selected_type != "all" and clip_type != selected_type:
+                    continue
+                
+                filtered_clips.append(clip)
+            
+            # Sort by score
+            def get_score(c):
+                m = c.get("moment", c)
+                return m.get("virality_score", c.get("virality_score", 0))
+            filtered_clips.sort(key=get_score, reverse=True)
+            
+            # Batch render section
+            col_info, col_action = st.columns([2, 1])
+            with col_info:
+                st.subheader(f"Clips ({len(filtered_clips)} of {len(clips)})")
+            with col_action:
+                if st.button("🎬 Render All Shorts", type="primary", use_container_width=True):
+                    st.session_state["show_batch_render"] = True
+            
+            # Batch render confirmation
+            if st.session_state.get("show_batch_render"):
+                with st.container():
+                    st.info(f"🎬 **Render {len(filtered_clips)} shorts?**")
+                    st.caption(f"Estimated cost: ~€{len(filtered_clips) * 0.5 * 0.022:.2f} (avg 30s per short)")
+                    
+                    col_theme, col_confirm, col_cancel = st.columns([2, 1, 1])
+                    with col_theme:
+                        batch_theme = st.selectbox("Theme", ["episode", "minimal", "cinematic"], key="batch_theme")
+                    with col_confirm:
+                        if st.button("✅ Start All", type="primary", use_container_width=True):
+                            with st.spinner(f"Triggering {len(filtered_clips)} render jobs..."):
+                                success, total = trigger_batch_render(selected_video, filtered_clips, batch_theme)
+                            st.success(f"✅ Started {success}/{total} render jobs!")
+                            st.session_state["show_batch_render"] = False
+                            st.link_button(
+                                "👁️ View in GitHub Actions",
+                                f"https://github.com/{st.secrets.get('github', {}).get('repo', 'meanapes/1sec-clips')}/actions/workflows/render-short.yml",
+                                use_container_width=True
+                            )
+                    with col_cancel:
+                        if st.button("❌ Cancel", use_container_width=True):
+                            st.session_state["show_batch_render"] = False
+                            st.rerun()
+            
+            st.divider()
+            
+            # Render clips
+            for clip in filtered_clips:
+                render_clip_card(clip, selected_video, s3_base_url)
+        
+        with tab_gallery:
+            # Auto-refresh every 30 seconds when on gallery tab
+            st_autorefresh(interval=30000, limit=None, key="gallery_refresh")
+            
+            st.subheader("🎬 Rendered Shorts")
+            
+            # Load render status
+            render_status = load_render_status(selected_video)
+            
+            # Count stats
+            ready_count = 0
+            rendering_count = 0
+            queued_count = 0
+            
+            for clip in clips:
+                clip_id = clip.get("id", "unknown")
+                # Check if short actually exists in S3
+                if check_short_exists(selected_video, clip_id, s3_base_url):
+                    ready_count += 1
+                elif clip_id in render_status.get("clips", {}):
+                    status = render_status["clips"][clip_id].get("status", "unknown")
+                    if status == "rendering":
+                        rendering_count += 1
+                    elif status == "queued":
+                        queued_count += 1
+            
+            # Stats row
+            col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+            with col_s1:
+                st.metric("✅ Ready", ready_count)
+            with col_s2:
+                st.metric("⏳ Rendering", rendering_count)
+            with col_s3:
+                st.metric("📋 Queued", queued_count)
+            with col_s4:
+                st.metric("📊 Total", len(clips))
+            
+            st.divider()
+            
+            # Gallery grid
+            cols_per_row = 3
+            rows = [clips[i:i + cols_per_row] for i in range(0, len(clips), cols_per_row)]
+            
+            for row in rows:
+                cols = st.columns(cols_per_row)
+                for idx, clip in enumerate(row):
+                    with cols[idx]:
+                        clip_id = clip.get("id", "unknown")
+                        moment = clip.get("moment", clip)
+                        encoded_video_id = quote(selected_video, safe='')
+                        short_url = f"{s3_base_url}/videos/{encoded_video_id}/shorts/short_{clip_id}_episode.mp4"
+                        
+                        # Check status
+                        exists = check_short_exists(selected_video, clip_id, s3_base_url)
+                        clip_status = render_status.get("clips", {}).get(clip_id, {})
+                        
+                        # Status indicator
+                        if exists:
+                            st.success(f"✅ {clip_id}")
+                            st.video(short_url)
+                            st.link_button("⬇️ Download", short_url, use_container_width=True)
+                        elif clip_status.get("status") == "rendering":
+                            st.warning(f"⏳ {clip_id} - Rendering...")
+                            started = clip_status.get("started_at", "")[:19]
+                            st.caption(f"Started: {started}")
+                        elif clip_status.get("status") == "queued":
+                            st.info(f"📋 {clip_id} - Queued")
+                        elif clip_status.get("status") == "failed":
+                            st.error(f"❌ {clip_id} - Failed")
+                            st.caption(clip_status.get("error", "Unknown error"))
+                        else:
+                            st.markdown(f"⬜ {clip_id}")
+                            # Quick render button
+                            if st.button("🎬 Render", key=f"gallery_render_{clip_id}", use_container_width=True):
+                                success, msg = trigger_workflow_dispatch(
+                                    "render-short.yml",
+                                    {"video_id": selected_video, "clip_id": clip_id, "theme": "episode"}
+                                )
+                                if success:
+                                    st.success("Started!")
+                                    # Update status
+                                    render_status.setdefault("clips", {})[clip_id] = {
+                                        "status": "rendering",
+                                        "started_at": datetime.utcnow().isoformat(),
+                                    }
+                                    save_render_status(selected_video, render_status)
+                                    st.rerun()
+                        
+                        # Show description
+                        reason_ru = moment.get("reason_ru", "")
+                        if reason_ru:
+                            st.caption(reason_ru[:50] + "..." if len(reason_ru) > 50 else reason_ru)
 
 
 if __name__ == "__main__":
