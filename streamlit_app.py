@@ -488,18 +488,20 @@ def main():
             with col_b:
                 proc_max_duration = st.number_input("Max Duration (s)", 20, 300, 180, 10)
             
-            ai_model = st.selectbox(
-                "AI Model",
-                ["gemini-2.0-flash", "gemini-3-flash-preview", "gemini-3-pro-preview"],
-                index=0
-            )
+            col_c, col_d = st.columns(2)
+            with col_c:
+                proc_padding = st.number_input("Padding (s)", 0, 30, 3, 1, help="Секунды до/после момента")
+            with col_d:
+                audio_lang = st.selectbox(
+                    "Audio Language",
+                    ["ru", "en", "auto"],
+                    index=0,
+                    help="Prefer Russian audio track (for movies with multiple dubs)"
+                )
             
-            audio_lang = st.selectbox(
-                "Audio Language",
-                ["ru", "en", "auto"],
-                index=0,
-                help="Prefer Russian audio track (for movies with multiple dubs)"
-            )
+            # Fixed to gemini-3-pro-preview (best quality)
+            ai_model = "gemini-3-pro-preview"
+            st.text_input("AI Model", value=ai_model, disabled=True)
             
             if st.button("🚀 Start Processing", type="primary", disabled=not video_url):
                 with st.spinner("Triggering workflow..."):
@@ -510,6 +512,7 @@ def main():
                             "min_score": str(proc_min_score),
                             "max_duration": str(proc_max_duration),
                             "model": ai_model,
+                            "padding": str(proc_padding),
                             "audio_language": audio_lang,
                         }
                     )
