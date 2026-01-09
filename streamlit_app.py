@@ -14,7 +14,88 @@ from urllib.parse import quote
 import boto3
 import requests
 import streamlit as st
-# Removed streamlit_autorefresh - using manual refresh button instead
+
+
+# =============================================================================
+# POSTFORME API FUNCTIONS
+# =============================================================================
+
+def get_postforme_headers():
+    """Get headers for Postforme API requests."""
+    api_key = st.secrets.get("postforme", {}).get("api_key", "")
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+
+def postforme_get_accounts():
+    """Get list of connected social accounts from Postforme."""
+    try:
+        response = requests.get(
+            "https://api.postforme.dev/v1/social-accounts",
+            headers=get_postforme_headers(),
+            timeout=10
+        )
+        if response.status_code == 200:
+            return response.json().get("data", [])
+        return []
+    except Exception as e:
+        st.error(f"Postforme API error: {e}")
+        return []
+
+
+def postforme_get_auth_url(platform: str) -> str | None:
+    """Get OAuth URL to connect a new social account."""
+    try:
+        response = requests.post(
+            "https://api.postforme.dev/v1/social-accounts/auth-url",
+            headers=get_postforme_headers(),
+            json={"platform": platform},
+            timeout=10
+        )
+        if response.status_code == 200:
+            return response.json().get("url")
+        st.error(f"Failed to get auth URL: {response.text}")
+        return None
+    except Exception as e:
+        st.error(f"Postforme API error: {e}")
+        return None
+
+
+def postforme_disconnect_account(account_id: str) -> bool:
+    """Disconnect a social account."""
+    try:
+        response = requests.delete(
+            f"https://api.postforme.dev/v1/social-accounts/{account_id}",
+            headers=get_postforme_headers(),
+            timeout=10
+        )
+        return response.status_code in [200, 204]
+    except Exception:
+        return False
+
+
+def postforme_create_post(media_url: str, caption: str, account_ids: list[str], scheduled_at: str = None) -> dict:
+    """Create a post on connected social accounts."""
+    try:
+        payload = {
+            "caption": caption,
+            "media": [{"url": media_url}],
+            "social_accounts": account_ids,
+        }
+        if scheduled_at:
+            payload["scheduled_at"] = scheduled_at
+        
+        response = requests.post(
+            "https://api.postforme.dev/v1/social-posts",
+            headers=get_postforme_headers(),
+            json=payload,
+            timeout=30
+        )
+        return {"success": response.status_code in [200, 201], "data": response.json()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 # Page config
 st.set_page_config(
@@ -699,8 +780,8 @@ def main():
         
         st.divider()
         
-        # Tabs: Clips | Gallery
-        tab_clips, tab_gallery = st.tabs(["📋 Clips", "🎬 Gallery"])
+        # Tabs: Clips | Gallery | Publish
+        tab_clips, tab_gallery, tab_publish = st.tabs(["📋 Clips", "🎬 Gallery", "📤 Publish"])
         
         # Clips
         clips = metadata.get("clips", [])
@@ -889,6 +970,150 @@ def main():
                         reason_ru = moment.get("reason_ru", "")
                         if reason_ru:
                             st.caption(reason_ru[:50] + "..." if len(reason_ru) > 50 else reason_ru)
+        
+        # =================================================================
+        # PUBLISH TAB
+        # =================================================================
+        with tab_publish:
+            st.subheader("📤 Publish to Social Media")
+            
+            # Check if Postforme API key is configured
+            postforme_key = st.secrets.get("postforme", {}).get("api_key", "")
+            if not postforme_key:
+                st.warning("⚠️ Postforme API key not configured. Add it to secrets as `postforme.api_key`")
+                st.stop()
+            
+            # Connected accounts section
+            st.markdown("### 🔗 Подключённые аккаунты")
+            
+            accounts = postforme_get_accounts()
+            
+            if accounts:
+                for acc in accounts:
+                    col_acc, col_action = st.columns([4, 1])
+                    with col_acc:
+                        platform = acc.get("platform", "unknown")
+                        name = acc.get("name", acc.get("username", "Unknown"))
+                        platform_icons = {
+                            "youtube": "▶️",
+                            "tiktok": "🎵",
+                            "instagram": "📸",
+                            "twitter": "🐦",
+                            "x": "𝕏",
+                        }
+                        icon = platform_icons.get(platform.lower(), "🔗")
+                        st.markdown(f"{icon} **{platform.title()}**: {name}")
+                    with col_action:
+                        if st.button("🗑️", key=f"disconnect_{acc.get('id')}", help="Отключить"):
+                            if postforme_disconnect_account(acc.get("id")):
+                                st.success("Отключено!")
+                                st.rerun()
+                            else:
+                                st.error("Ошибка")
+            else:
+                st.info("Нет подключённых аккаунтов")
+            
+            st.divider()
+            
+            # Connect new account
+            st.markdown("### ➕ Подключить новый аккаунт")
+            
+            col_yt, col_tt, col_ig, col_tw = st.columns(4)
+            
+            with col_yt:
+                if st.button("▶️ YouTube", use_container_width=True):
+                    auth_url = postforme_get_auth_url("youtube")
+                    if auth_url:
+                        st.markdown(f"[🔗 Открыть авторизацию YouTube]({auth_url})")
+                        st.info("После авторизации обнови страницу")
+            
+            with col_tt:
+                if st.button("🎵 TikTok", use_container_width=True):
+                    auth_url = postforme_get_auth_url("tiktok")
+                    if auth_url:
+                        st.markdown(f"[🔗 Открыть авторизацию TikTok]({auth_url})")
+                        st.info("После авторизации обнови страницу")
+            
+            with col_ig:
+                if st.button("📸 Instagram", use_container_width=True):
+                    auth_url = postforme_get_auth_url("instagram")
+                    if auth_url:
+                        st.markdown(f"[🔗 Открыть авторизацию Instagram]({auth_url})")
+                        st.info("После авторизации обнови страницу")
+            
+            with col_tw:
+                if st.button("𝕏 Twitter", use_container_width=True):
+                    auth_url = postforme_get_auth_url("twitter")
+                    if auth_url:
+                        st.markdown(f"[🔗 Открыть авторизацию Twitter]({auth_url})")
+                        st.info("После авторизации обнови страницу")
+            
+            st.divider()
+            
+            # Publish shorts section
+            st.markdown("### 🎬 Опубликовать шортсы")
+            
+            if not accounts:
+                st.warning("Сначала подключи хотя бы один аккаунт")
+            else:
+                # Get ready shorts
+                ready_shorts = []
+                for clip in clips:
+                    clip_id = clip.get("id", "unknown")
+                    if check_short_exists(selected_video, clip_id, s3_base_url):
+                        moment = clip.get("moment", clip)
+                        encoded_video_id = quote(selected_video, safe='')
+                        short_url = f"{s3_base_url}/videos/{encoded_video_id}/shorts/short_{clip_id}_episode.mp4"
+                        ready_shorts.append({
+                            "clip_id": clip_id,
+                            "url": short_url,
+                            "reason_ru": moment.get("reason_ru", f"Момент из {selected_video}"),
+                        })
+                
+                if not ready_shorts:
+                    st.info("Нет готовых шортсов для публикации. Сначала отрендери их во вкладке Gallery.")
+                else:
+                    st.success(f"✅ {len(ready_shorts)} шортсов готово к публикации")
+                    
+                    # Select shorts to publish
+                    selected_shorts = st.multiselect(
+                        "Выбери шортсы для публикации",
+                        options=[s["clip_id"] for s in ready_shorts],
+                        format_func=lambda x: f"{x}: {next((s['reason_ru'][:40] for s in ready_shorts if s['clip_id'] == x), '')}..."
+                    )
+                    
+                    # Select accounts to publish to
+                    selected_accounts = st.multiselect(
+                        "Куда публиковать",
+                        options=[acc.get("id") for acc in accounts],
+                        format_func=lambda x: f"{next((acc.get('platform', '').title() + ': ' + acc.get('name', '') for acc in accounts if acc.get('id') == x), x)}"
+                    )
+                    
+                    # Caption template
+                    caption_template = st.text_area(
+                        "Шаблон подписи",
+                        value="{reason}\n\n#shorts #кино #фильмы",
+                        help="Используй {reason} для автоподстановки описания момента"
+                    )
+                    
+                    # Publish button
+                    if st.button("🚀 Опубликовать", type="primary", disabled=not selected_shorts or not selected_accounts):
+                        progress = st.progress(0)
+                        for i, clip_id in enumerate(selected_shorts):
+                            short = next((s for s in ready_shorts if s["clip_id"] == clip_id), None)
+                            if short:
+                                caption = caption_template.replace("{reason}", short["reason_ru"])
+                                result = postforme_create_post(
+                                    media_url=short["url"],
+                                    caption=caption,
+                                    account_ids=selected_accounts
+                                )
+                                if result["success"]:
+                                    st.success(f"✅ {clip_id} опубликован!")
+                                else:
+                                    st.error(f"❌ {clip_id}: {result.get('error', 'Unknown error')}")
+                            progress.progress((i + 1) / len(selected_shorts))
+                        st.balloons()
 
 
 if __name__ == "__main__":
