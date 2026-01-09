@@ -3,9 +3,11 @@
 Simple Streamlit app to browse clips and trigger short rendering.
 """
 
+import io
 import json
 import os
 import time
+import zipfile
 from datetime import datetime
 from urllib.parse import quote
 
@@ -244,6 +246,41 @@ def check_short_exists(video_id: str, clip_id: str, s3_base_url: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def create_shorts_zip(video_id: str, clips: list) -> bytes | None:
+    """
+    Download all ready shorts and create a ZIP archive.
+    Returns ZIP file as bytes, or None if no shorts available.
+    """
+    s3 = get_s3_client()
+    bucket = st.secrets["s3"]["bucket"]
+    
+    zip_buffer = io.BytesIO()
+    shorts_found = 0
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for clip in clips:
+            clip_id = clip.get("id", "unknown")
+            key = f"videos/{video_id}/shorts/short_{clip_id}_episode.mp4"
+            
+            try:
+                # Download from S3
+                response = s3.get_object(Bucket=bucket, Key=key)
+                video_data = response['Body'].read()
+                
+                # Add to ZIP
+                zip_file.writestr(f"short_{clip_id}.mp4", video_data)
+                shorts_found += 1
+            except Exception:
+                # Short doesn't exist yet, skip
+                continue
+    
+    if shorts_found == 0:
+        return None
+    
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
 
 
 def trigger_batch_render(video_id: str, clips: list, theme: str = "episode") -> tuple[int, int]:
@@ -769,6 +806,33 @@ def main():
                 st.metric("📋 Queued", queued_count)
             with col_s4:
                 st.metric("📊 Total", len(clips))
+            
+            # Download All button
+            if ready_count > 0:
+                col_dl1, col_dl2 = st.columns([1, 3])
+                with col_dl1:
+                    if st.button("📦 Скачать всё (ZIP)", key="download_all_zip", use_container_width=True):
+                        with st.spinner(f"Создаю архив ({ready_count} шортсов)..."):
+                            zip_data = create_shorts_zip(selected_video, clips)
+                            if zip_data:
+                                st.session_state["zip_data"] = zip_data
+                                st.session_state["zip_ready"] = True
+                            else:
+                                st.error("Не удалось создать архив")
+                
+                # Show download button if ZIP is ready
+                if st.session_state.get("zip_ready"):
+                    with col_dl1:
+                        # Clean filename from video title
+                        safe_name = "".join(c for c in selected_video if c.isalnum() or c in (' ', '-', '_')).strip()[:30]
+                        st.download_button(
+                            label="⬇️ Скачать ZIP",
+                            data=st.session_state["zip_data"],
+                            file_name=f"{safe_name}_shorts.zip",
+                            mime="application/zip",
+                            key="download_zip_btn",
+                            use_container_width=True
+                        )
             
             st.divider()
             
